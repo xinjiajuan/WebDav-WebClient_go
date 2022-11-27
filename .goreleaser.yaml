@@ -9,4 +9,3 @@ builds:
       - amd64
       - arm
       - arm64
-    gobinary: "go1.18"
