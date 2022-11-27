@@ -42,22 +42,22 @@ jobs:
       - name: Add $GITHUB_WORKSPACE to git safe.directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: goreleaser/goreleaser-action@v3
-        builds:
-          - env:
-              - CGO_ENABLED=0
-            goos:
-              - linux
-              - darwin
-              - windows
-        archive:
-          replacements:
-            darwin: Darwin
-            linux: Linux
-            windows: Windows
-            386: i386
-            amd64: x86_64
         with:
           version: latest
           args: release --rm-dist
+          builds:
+            - env:
+                - CGO_ENABLED=0
+              goos:
+                - linux
+                - darwin
+                - windows
+          archive:
+            replacements:
+              darwin: Darwin
+              linux: Linux
+              windows: Windows
+              386: i386
+              amd64: x86_64
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
