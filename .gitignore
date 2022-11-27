@@ -1,6 +1,6 @@
 .idea
 *.exe
-*.yaml
+config.yaml
 .DS_Store
 WebDav-ClientWeb*
 WebDav-ClientWeb
