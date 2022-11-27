@@ -9,7 +9,7 @@ type Yaml struct {
 }
 type Server struct {
 	Name       string `yaml:"Webdavname"`
-	ListenPort int    `yaml:"listenPort"`
+	ListenPort string `yaml:"listenPort"`
 	Enable     bool   `yaml:"enable"`
 	Host       string `yaml:"webdavhost"`
 	UserName   string `yaml:"user"`

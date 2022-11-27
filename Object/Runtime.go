@@ -2,13 +2,13 @@ package Object
 
 import (
 	"WebDav-ClientWeb/Object/Config"
+	"WebDav-ClientWeb/Object/Config/Log"
 	"bytes"
 	"context"
 	"fmt"
 	"github.com/klarkxy/gohtml"
 	"github.com/studio-b12/gowebdav"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,33 +37,40 @@ func MakeS3HttpServer(config Config.Yaml) {
 		serverhandler := HandlerServer{}
 		serverhandler.ServerInfo = server
 		webserver := http.Server{
-			Addr:    ":" + strconv.Itoa(server.ListenPort),
+			Addr:    server.ListenPort,
 			Handler: serverhandler,
 		}
 		serverObjectList = append(serverObjectList, &webserver)
 	}
+	Log.AppLog.Infoln("Server config load Ok!")
 	RunHttpServer(serverList, serverObjectList)
 }
 
 //运行http服务
 func RunHttpServer(serverlist []Config.Server, httpSrv []*http.Server) {
 	for i, serverObject := range httpSrv {
-		println(serverlist[i].Name + " is Running to :" + strconv.Itoa(serverlist[i].ListenPort) + "/" + serverlist[i].Name)
+		Log.AppLog.Infoln(serverlist[i].Name + " server listening at: " + serverlist[i].ListenPort + "/" + serverlist[i].Name)
 		if serverlist[i].Options.UseTLS.Enable {
 			go serverObject.ListenAndServeTLS(serverlist[i].Options.UseTLS.CertFile, serverlist[i].Options.UseTLS.CertKey) //监听https服务
 		} else {
 			go serverObject.ListenAndServe() //协程并发监听http服务
 		}
 	}
+	Log.AppLog.Infoln("The http service is started and the program is started!")
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	select {
 	//程序堵塞
 	case <-sigs: //检测Ctrl+c退出程序命令
 		for i, serverObject := range httpSrv {
-			fmt.Println("Shutting down " + serverlist[i].Name + " instance gracefully...")
-			serverObject.Shutdown(context.Background()) //平滑关闭Http Server线程
-			fmt.Println("Instance " + serverlist[i].Name + " has exited safely!")
+			Log.AppLog.Infoln("Shutting down " + serverlist[i].Name + " instance gracefully...")
+			er := serverObject.Shutdown(context.Background()) //平滑关闭Http Server线程
+			if er != nil {
+				Log.SetReportCaller(true)
+				Log.AppLog.Fatalln(er.Error())
+				Log.SetReportCaller(false)
+			}
+			Log.AppLog.Infoln("Instance " + serverlist[i].Name + " has exited safely!")
 		}
 	}
 }
@@ -72,23 +79,30 @@ func RunHttpServer(serverlist []Config.Server, httpSrv []*http.Server) {
 func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	url, _ := url.QueryUnescape(r.URL.RequestURI())
 	urlArray := strings.Split(url, "/")
+	//获取IP地址
+	clientIP := GetIP(r)
 	//判断url是哪一种请求
 	//网站图标
+	Request := clientIP + " --> " + r.Host + "," + r.Proto + "," + r.UserAgent() + "," + r.RequestURI
 	if r.URL.RequestURI() == "/favicon.ico" {
 		w.Header().Set("Location", webserver.ServerInfo.Options.Favicon)
 		w.WriteHeader(301)
+		Log.AppLog.Infoln(Request, "Code:", 301)
 		return
 	}
 	if urlArray[1] != "d" && urlArray[1] != webserver.ServerInfo.Name {
 		fmt.Fprintln(w, ErrorPage_404(webserver.ServerInfo.Name))
+		Log.AppLog.Infoln(Request, "Code:", 404)
 		return
 	}
 	if urlArray[1] == "d" {
 		if len(urlArray) <= 3 && len(urlArray) >= 2 {
 			fmt.Fprintln(w, ErrorPage_404(webserver.ServerInfo.Name))
+			Log.AppLog.Infoln(Request, "Code:", 404)
 			return
 		} else if len(urlArray) == 4 && urlArray[3] == "" {
 			fmt.Fprintln(w, ErrorPage_404(webserver.ServerInfo.Name))
+			Log.AppLog.Infoln(Request, "Code:", 404)
 			return
 		}
 	}
@@ -98,7 +112,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		WebdavClient := gowebdav.NewClient(webserver.ServerInfo.Host, webserver.ServerInfo.UserName, webserver.ServerInfo.PassWD)
 		er := WebdavClient.Connect()
 		if er != nil {
-			fmt.Println(er.Error())
+			Log.AppLog.Errorln(er.Error())
 			fmt.Fprintln(w, er.Error())
 			return
 		}
@@ -109,7 +123,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		bufnew := new(bytes.Buffer)
 		_, err := bufnew.ReadFrom(objectStream)
 		if err != nil {
-			fmt.Println(err.Error())
+			Log.AppLog.Errorln(err.Error())
 			fmt.Fprintln(w, err.Error())
 			return
 		}
@@ -117,7 +131,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		ContentTyper := http.DetectContentType(bufnew.Bytes())
 		// 资源关闭
 		if err != nil {
-			log.Println("sendFile1", err.Error())
+			Log.AppLog.Warningln("sendFile1", err.Error())
 			http.NotFound(w, r)
 			return
 		}
@@ -135,7 +149,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				}
 				if start > end || start < 0 || end < 0 || end >= reader.Size() {
 					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-					log.Println("sendFile2 start:", start, "end:", end, "size:", reader.Size())
+					Log.AppLog.Warningln("sendFile2 start:", start, "end:", end, "size:", reader.Size())
 					return
 				}
 				w.Header().Add("Content-Length", strconv.FormatInt(end-start+1, 10))
@@ -147,8 +161,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			}
 		} else {
 			// 非断点续传
-			fmt.Println(time.Now().Format(time.UnixDate), r.URL.RequestURI(), r.Proto, r.Host, r.UserAgent(), r.URL.Query().Get("mz_id"))
-			println()
+			Log.AppLog.Infoln(Request, "Code", 200)
 			w.Header().Add("Content-Length", strconv.FormatInt(reader.Size(), 10))
 			start = 0
 			end = reader.Size() - 1
@@ -159,7 +172,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		if err != nil {
-			log.Println("sendFile3", err.Error())
+			Log.AppLog.Warningln("SentFile3:", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -172,7 +185,7 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			//原生 io
 			_, er := io.CopyBuffer(w, reader, buf)
 			if er != nil {
-				//log.Println(err, start, end, info.Size(), n)
+				Log.AppLog.Errorln(er.Error())
 				return
 			}
 			start += int64(n)
@@ -183,27 +196,10 @@ func (webserver HandlerServer) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 	//显示首页
 	str := strings.SplitN(url, "/", 3)
-	for i, s := range str {
-		print(i)
-		println(s)
-	}
-	/*
-		if len(str) < 3 {
-			webserver.webdavFilePath = []string{"", ""}
-		} else {
-			webserver.webdavFilePath = str
-		}*/
 	webserver.webdavFilePath = str
-	println(webserver.webdavFilePath[1])
-	/*
-		for i, s := range str {
-			print(i)
-			println(s)
-		}
-	*/
 	html := HomePage(webserver)
 	fmt.Fprintln(w, html)
-
+	Log.AppLog.Infoln(Request, "Code", 200)
 }
 
 //生成404页面
@@ -221,7 +217,7 @@ func HomePage(webserver HandlerServer) string {
 	WebdavClient := gowebdav.NewClient(webserver.ServerInfo.Host, webserver.ServerInfo.UserName, webserver.ServerInfo.PassWD)
 	er := WebdavClient.Connect()
 	if er != nil {
-		fmt.Println(er.Error())
+		Log.AppLog.Error(er.Error())
 		return "Create Client:" + er.Error()
 	}
 	var objectList []os.FileInfo
@@ -231,7 +227,7 @@ func HomePage(webserver HandlerServer) string {
 		objectList, er = WebdavClient.ReadDir(webserver.webdavFilePath[2])
 	}
 	if er != nil {
-		log.Println(er.Error())
+		Log.AppLog.Errorln(er.Error())
 		return er.Error()
 	}
 	//var i = 0 //对象计数
@@ -267,7 +263,6 @@ func makeBreadCrumb(divframe *gohtml.GoTag, urlpath []string, servername string)
 			ol.Body().Li().Class("breadcrumb-item").Body().A().Text(str).Href(url)
 		}
 	}
-	println(url)
 	return divframe, url
 }
 

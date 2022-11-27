@@ -12,15 +12,15 @@ package main
 import (
 	"WebDav-ClientWeb/Object"
 	"WebDav-ClientWeb/Object/Config"
+	"WebDav-ClientWeb/Object/Config/Log"
 	"github.com/urfave/cli/v2"
-	"log"
 	"os"
 	"time"
 )
 
 func main() {
 	var pathConfig string
-
+	Log.InitLog()
 	app := &cli.App{
 		Name:     Config.AppName,
 		Version:  Config.Version,
@@ -47,7 +47,9 @@ func main() {
 			//判断文件夹是否存在
 			_, err := os.Stat(cCtx.String("config")) //os.Stat获取文件信息
 			if err != nil {
-				return cli.Exit("配置文件不存在!", 86)
+				Log.SetReportCaller(true)
+				Log.AppLog.Fatalln(err.Error())
+				Log.SetReportCaller(false)
 			} else {
 				config := Config.ReadConfig(cCtx.String("config"))
 				Object.MakeS3HttpServer(config)
@@ -56,6 +58,8 @@ func main() {
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		Log.SetReportCaller(true)
+		Log.AppLog.Fatalln(err.Error())
+		Log.SetReportCaller(false)
 	}
 }
