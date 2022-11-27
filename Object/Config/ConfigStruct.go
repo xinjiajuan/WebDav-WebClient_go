@@ -34,7 +34,7 @@ type ObjectInfo struct {
 }
 
 var (
-	Version string = "1.0.1"
+	Version string = "1.1.0"
 	AppName string = "WebDav-WebClient"
 	Usage   string = "基于WebDav文件下载服务器"
 )
