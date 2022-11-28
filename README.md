@@ -19,12 +19,13 @@ server:
     user: 'xxxxxxxx@domain.com' #webdav user
     passwd: o2g8**********************  #webdav password
     weboptions: #web sub option
-      useSSL: # ssl sub option
+      useTLS: # ssl sub option
         enable: false # enable is web ssl?
         certFile: ""  # cert path
         certKey: "" #certkey path
       access-control-allow-origin: "*" #资源跨域策略,只对下载链接有效,主页无跨域设置
       favicon: "" #网页图标url,通过 301 跳转获取,暂不支持本地图片,请使用在线资源
+      beianMiit: "" #备案号
 ```
 ## build for source
 

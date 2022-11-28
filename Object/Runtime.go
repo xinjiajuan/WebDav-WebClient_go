@@ -51,9 +51,19 @@ func RunHttpServer(serverlist []Config.Server, httpSrv []*http.Server) {
 	for i, serverObject := range httpSrv {
 		Log.AppLog.Infoln(serverlist[i].Name + " server listening at: " + serverlist[i].ListenPort + "/" + serverlist[i].Name)
 		if serverlist[i].Options.UseTLS.Enable {
-			go serverObject.ListenAndServeTLS(serverlist[i].Options.UseTLS.CertFile, serverlist[i].Options.UseTLS.CertKey) //监听https服务
+			go func() {
+				err := serverObject.ListenAndServeTLS(serverlist[i].Options.UseTLS.CertFile, serverlist[i].Options.UseTLS.CertKey)
+				if err != nil {
+					Log.AppLog.Warningln(err.Error())
+				}
+			}() //监听https服务
 		} else {
-			go serverObject.ListenAndServe() //协程并发监听http服务
+			go func() {
+				err := serverObject.ListenAndServe()
+				if err != nil {
+					Log.AppLog.Warningln(err.Error())
+				}
+			}() //协程并发监听http服务
 		}
 	}
 	Log.AppLog.Infoln("The http service is started and the program is started!")
